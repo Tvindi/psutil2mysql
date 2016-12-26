@@ -1,0 +1,67 @@
+# ndtms settings file
+
+database = dict(
+    DATABASE="PSUTIL",
+    USER="adim4PSUTIL",
+    PASS="password"
+)
+# {'username': 'root', 'status': 'sleeping',
+# 'cpu_times': pcputimes(user=0.0, system=0.0, children_user=0.0,
+# children_system=0.0), 'name': 'kworker/3:0H', 'cpu_percent': 0.0,
+# 'memory_percent': 0.0, 'memory_info': pmem(rss=0, vms=0, shared=0,
+# text=0, lib=0, data=0, dirty=0), 'nice': -20}
+
+tables = dict(
+    psutil_iter_time = '''CREATE TABLE psutil_iter_time (
+    psutil_iter_time_id int not null AUTO_INCREMENT,
+    psutil_iter_time int(11),
+    index(psutil_iter_time_id))
+    CHARSET=latin1;''',
+
+    psutil_user = '''CREATE TABLE psutil_user (
+    psutil_user_id int not null AUTO_INCREMENT,
+    psutil_user_name varchar(255) UNIQUE,
+    index(psutil_user_id))
+    CHARSET=latin1;''',
+
+    psutil_name = '''CREATE TABLE psutil_name (
+    psutil_name_id int not null AUTO_INCREMENT,
+    psutil_name_name varchar(255) UNIQUE,
+    index(psutil_name_id))
+    CHARSET=latin1;''',
+
+    psutil_top = '''CREATE TABLE psutil_top (
+    psutil_top_id int not null AUTO_INCREMENT,
+    psutil_top_iter_id int not null,
+    psutil_top_user_id int not null,
+    psutil_top_nice float(20,15),
+    psutil_top_memory_percent float(20,15),
+    psutil_top_cpu_percent float(20,15),
+    psutil_top_name_id int not null,
+    psutil_top_status varchar(255),
+    index(psutil_top_id))
+    CHARSET=latin1;''',
+
+    psutil_cpu_times = '''CREATE TABLE psutil_cpu_times (
+    psutil_cpu_times_id int not null AUTO_INCREMENT,
+    psutil_cpu_times_top_id int not null,
+    psutil_cpu_times_user float(20,15),
+    psutil_cpu_times_system float(20,15),
+    psutil_cpu_times_children_user float(20,15),
+    psutil_cpu_times_children_system float(20,15),
+    index(psutil_cpu_times_id))
+    CHARSET=latin1;''',
+
+    psutil_memory_info = '''CREATE TABLE psutil_memory_info  (
+    psutil_memory_info_id int not null AUTO_INCREMENT,
+    psutil_memory_info_top_id int not null,
+    psutil_memory_info_rss int not null,
+    psutil_memory_info_vms int not null,
+    psutil_memory_info_shared int not null,
+    psutil_memory_info_text int not null,
+    psutil_memory_info_lib int not null,
+    psutil_memory_info_data int not null,
+    psutil_memory_info_dirty int not null,
+    index(psutil_memory_info_id))
+    CHARSET=latin1;''',
+)
