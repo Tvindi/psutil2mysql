@@ -9,7 +9,7 @@ db = None
 
 def initmysql():
 
-    global cur, db
+    global cur, db, dict_cur
 
 # your host, usually localhost
 
@@ -22,7 +22,7 @@ def initmysql():
     # you must create a Cursor object. It will let
     #  you execute all the queries you need
     cur = db.cursor()
-
+    dict_cur = db.cursor (MySQLdb.cursors.DictCursor)
 
 def showtables(table_name):
     global cur
@@ -51,22 +51,116 @@ def setup():
             except cur.Error as err:
                 print(("Something went wrong: {}".format(err)))
 
+def get_name_from_id(iid):
 
-def get_all_metrics(dct):
-
-    global cur, db
-    mstr = ''
+    global cur
     try:
-        cur.execute('''SELECT pdf_text_str FROM pdf_text;''')
-        for row in cur:
-            """ print row """
-            mstr += str(row[0])
-            """ if row[0]:
-               return row[0]"""
-    except cur.Error as err:
+        cur.execute('''SELECT psutil_name_name FROM psutil_name WHERE psutil_name_id = %s;''' % iid)
+        for r in cur.fetchone():
+            name = r
+    except dict_cur.Error as err:
         print(("Something went wrong: {}".format(err)))
-    return mstr
+    #print name
+    return name
 
+def get_user_from_id(iid):
+
+    global cur
+    try:
+        cur.execute('''SELECT psutil_user_name FROM psutil_user WHERE psutil_user_id = %s;''' % iid)
+        for r in cur.fetchone():
+            name = r
+    except dict_cur.Error as err:
+        print(("Something went wrong: {}".format(err)))
+    #print name
+    return name
+
+def get_iter_time_all():
+
+    global dict_cur
+    iteration = {}
+    try:
+        dict_cur.execute('''SELECT * FROM psutil_iter_time;''')
+        for r in dict_cur:
+            iteration[int(r['psutil_iter_time'])] = int(r['psutil_iter_time_id'])
+    except dict_cur.Error as err:
+        print(("Something went wrong: {}".format(err)))
+    return iteration
+
+def get_tops_by_iter_id_all(iid):
+
+    global dict_cur
+    top = []
+    try:
+        dict_cur.execute('''SELECT * FROM psutil_top WHERE psutil_top_iter_id = %s;''' % iid)
+        for r in dict_cur:
+            top.append(r)
+    except dict_cur.Error as err:
+        print(("Something went wrong: {}".format(err)))
+    return top
+def get_process_cpu_percent(above_target):
+    global cur
+    m = []
+    try:
+        sql = '''
+                    SELECT
+                        psutil_name_name,
+                        psutil_top_nice,
+                        psutil_top_memory_percent,
+                        psutil_top_cpu_percent,
+                        psutil_top_status
+                    FROM
+                        psutil_top,
+                        psutil_name,
+                        psutil_lut
+                    WHERE
+                        psutil_top_memory_percent > %s
+                    AND
+                        psutil_lut_name_id = psutil_name_id
+                    AND
+                        psutil_lut_top_id = psutil_top_id;
+                    '''
+        dict_cur.execute(sql,(above_target,))
+        for r in dict_cur:
+            m.append(r)
+    except dict_cur.Error as err:
+        print(("Something went wrong: {}".format(err)))
+    return m
+
+
+def get_all_by_process_name(name):
+
+    global cur
+    m = []
+    try:
+        sql = '''
+                    SELECT
+                        psutil_name_name,
+                        psutil_top_id,
+                        psutil_top_nice,
+                        psutil_top_memory_percent,
+                        psutil_top_cpu_percent,
+                        psutil_top_status
+                    FROM
+                        psutil_top,
+                        psutil_name,
+                        psutil_lut
+                    WHERE
+                        psutil_name_name LIKE %s
+                    AND
+                        psutil_lut_name_id = psutil_name_id
+                    AND
+                        psutil_lut_top_id = psutil_top_id;
+                    '''
+        dict_cur.execute(sql,(name,))
+        for r in dict_cur:
+            m.append(r)
+    except dict_cur.Error as err:
+        print(("Something went wrong: {}".format(err)))
+    return m
+
+#select * from psutil_name, psutil_lut, psutil_user WHERE psutil_name_id = psutil_lut_name_id AND psutil_lut_user_id = psutil_user_id and psutil_user_name like 'harwood';
+#
 
 def add_name(name):
     global cur
@@ -135,9 +229,9 @@ def add_user(user):
    # cursor.execute('SELECT last__id()')
     return cur.lastrowid
 
-def convert_unix_time(id):
-    global cur
-    sql = "SELECT psutil_iter_time_id, psutil_iter_time, FROM_UNIXTIME(psutil_iter_time) FROM psutil_iter_time"
+#def convert_unix_time(id):
+#    global cur
+#    sql = "SELECT psutil_iter_time_id, psutil_iter_time, FROM_UNIXTIME(psutil_iter_time) FROM psutil_iter_time"
 
 def add_metrics(ps_top):
 
@@ -148,25 +242,67 @@ def add_metrics(ps_top):
     name_id = add_name(ps_top['name'])
     user_id = add_user(ps_top['username'])
     print " name_id %s user_id %s" %(name_id,user_id)
+    top_id = add_top(ps_top['nice'],ps_top['memory_percent'],ps_top['cpu_percent'],ps_top['status'])
+    print (iter_id,name_id,user_id,top_id)
+    try:
+        cur.execute(
+            '''INSERT into psutil_lut(
+            psutil_lut_iter_time_id,
+            psutil_lut_top_id,
+            psutil_lut_user_id,
+            psutil_lut_name_id)
+            values (%s,%s,%s,%s)''',
+            (
+                iter_id,
+                top_id,
+                user_id,
+                name_id
+            )
+        )
+    except cur.Error as err:
+        print(("Something went wrong: {}".format(err)))
+
+    db.commit()
+    return top_id
+
+
+
+
+def add_top(t_nice,t_mem,t_cpu,t_stat):
+
+    global cur
+    try:
+        sql = """SELECT
+                psutil_top_id
+            FROM
+                psutil_top
+            WHERE
+                psutil_top_nice = %s AND
+                psutil_top_memory_percent = %s AND
+                psutil_top_cpu_percent = %s AND
+                psutil_top_status  = %s;"""
+        print (t_nice,t_mem,t_cpu,t_stat,)
+        cur.execute(sql,(t_nice,t_mem,t_cpu,t_stat,))
+        for row in cur.fetchall():
+            print "name row %s"% row[0]
+            if row[0]:
+                return  row[0]
+    except cur.Error as err:
+        print(("Something went wrong: {}".format(err)))
+
     try:
         cur.execute(
             '''INSERT into psutil_top(
-            psutil_top_user_id,
-            psutil_top_iter_id,
             psutil_top_nice,
             psutil_top_memory_percent,
             psutil_top_cpu_percent,
-            psutil_top_name_id,
             psutil_top_status)
-            values (%s,%s,%s,%s,%s,%s,%s)''',
+            values (%s,%s,%s,%s)''',
             (
-                user_id,
-                iter_id,
-                ps_top['nice'],
-                ps_top['memory_percent'],
-                ps_top['cpu_percent'],
-                name_id,
-                ps_top['status']
+                t_nice,
+                t_mem,
+                t_cpu,
+                t_stat
             )
         )
     except cur.Error as err:
